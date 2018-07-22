@@ -77,7 +77,7 @@ static void hal_io_check() {
 static const SPISettings settings(10E6, MSBFIRST, SPI_MODE0);
 
 static void hal_spi_init () {
-    SPI.begin();
+    SPI.begin(lmic_pins.sck, lmic_pins.miso, lmic_pins.mosi);
 }
 
 void hal_pin_nss (u1_t val) {
@@ -93,12 +93,14 @@ void hal_pin_nss (u1_t val) {
 // perform SPI transaction with radio
 u1_t hal_spi (u1_t out) {
     u1_t res = SPI.transfer(out);
-/*
-    Serial.print(">");
-    Serial.print(out, HEX);
-    Serial.print("<");
-    Serial.println(res, HEX);
-    */
+#ifdef LMIC_DEBUG_LEVEL
+#if LMIC_DEBUG_LEVEL>0
+    LMIC_PRINTF_TO.print(">");
+    LMIC_PRINTF_TO.print(out, HEX);
+    LMIC_PRINTF_TO.print("<");
+    LMIC_PRINTF_TO.println(res, HEX);
+#endif
+#endif
     return res;
 }
 
@@ -208,23 +210,37 @@ void hal_sleep () {
 // -----------------------------------------------------------------------------
 
 #if defined(LMIC_PRINTF_TO)
+#if defined(__AVR)
+// avr-libc provides an alternative (simpler) way to override STDOUT
 static int uart_putchar (char c, FILE *)
 {
-    LMIC_PRINTF_TO.write(c) ;
-    return 0 ;
+	LMIC_PRINTF_TO.write(c);
+	void hal_printf_init() {
+		// The uart is the standard output device STDOUT.
+		stdout = &uartout;
+	}
+	#else // defined(__AVR)
+		// On other platforms, use the somewhat more complex "cookie"-based
+		// approach to custom streams. This is a GNU-specific extension to libc.
+static ssize_t uart_putchar(void *, const char *buf, size_t len) {
+	
+	uint8_t *msg1 = new uint8_t[len];
+	memcpy(msg1, buf, len);
+	return LMIC_PRINTF_TO.write(msg1, len);
 }
-
+	
+static cookie_io_functions_t functions = {
+		.read = NULL,
+		.write = uart_putchar,
+		.seek = NULL,
+		.close = NULL
+};
+	
 void hal_printf_init() {
-    // create a FILE structure to reference our UART output function
-    static FILE uartout;
-    memset(&uartout, 0, sizeof(uartout));
-
-    // fill in the UART file descriptor with pointer to writer.
-    fdev_setup_stream (&uartout, uart_putchar, NULL, _FDEV_SETUP_WRITE);
-
-    // The uart is the standard output device STDOUT.
-    stdout = &uartout ;
+		stdout = fopencookie(NULL, "w", functions);
+		
 }
+	#endif // !defined(__AVR)
 #endif // defined(LMIC_PRINTF_TO)
 
 void hal_init () {
@@ -249,5 +265,7 @@ void hal_failed (const char *file, u2_t line) {
     LMIC_FAILURE_TO.flush();
 #endif
     hal_disableIRQs();
+
+	report_event(EV_LMIC_ASSERT);
     while(1);
 }

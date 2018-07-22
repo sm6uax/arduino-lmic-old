@@ -520,7 +520,9 @@ static void txlora () {
 
 // start transmitter (buf=LMIC.frame, len=LMIC.dataLen)
 static void starttx () {
-    ASSERT( (readReg(RegOpMode) & OPMODE_MASK) == OPMODE_SLEEP );
+    ASSERT( (readReg(RegOpMode) & OPMODE_MASK) == OPMODE_SLEEP ||
+	       (readReg(RegOpMode) & OPMODE_MASK) == OPMODE_RX);
+
     if(getSf(LMIC.rps) == FSK) { // FSK modem
         txfsk();
     } else { // LoRa modem
@@ -558,7 +560,7 @@ static void rxlora (u1_t rxmode) {
     // set LNA gain
     writeReg(RegLna, LNA_RX_GAIN);
     // set max payload size
-    writeReg(LORARegPayloadMaxLength, 64);
+    writeReg(LORARegPayloadMaxLength, 240);
 #if !defined(DISABLE_INVERT_IQ_ON_RX)
     // use inverted I/Q signal (prevent mote-to-mote communication)
     writeReg(LORARegInvertIQ, readReg(LORARegInvertIQ)|(1<<6));

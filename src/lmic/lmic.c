@@ -49,8 +49,8 @@ DEFINE_LMIC;
 
 // Fwd decls.
 static void engineUpdate(void);
-static void startScan (void);
-
+static void startScan(void);
+static void start_cont_rx(void);
 
 // ================================================================================
 // BEG OS - default implementations for certain OS suport functions
@@ -1535,6 +1535,9 @@ static bit_t processJoinAccept (void) {
     LMIC.rxDelay = LMIC.frame[OFF_JA_RXDLY];
     if (LMIC.rxDelay == 0) LMIC.rxDelay = 1;
     reportEvent(EV_JOINED);
+    if (LMIC.isClassC && LMIC.opmode && (OP_JOINING | OP_REJOIN | OP_TXDATA | OP_POLL) == 0)
+        start_cont_rx();
+
     return 1;
 }
 
@@ -1573,6 +1576,10 @@ static void jreqDone (xref2osjob_t osjob) {
 
 // Fwd decl.
 static bit_t processDnData(void);
+
+static void processRx2DnDataDelay (xref2osjob_t osjob) {
+    processDnData();
+}
 
 static void processRx2DnData (xref2osjob_t osjob) {
     if( LMIC.dataLen == 0 ) {
@@ -1914,6 +1921,10 @@ static bit_t processDnData (void) {
             LMIC.opmode &= ~OP_LINKDEAD;
             reportEvent(EV_LINK_ALIVE);
         }
+        if (LMIC.txrxFlags & TXRX_ACK || (LMIC.txCnt == 0 && LMIC.moreData)) {
+            LMIC.txCnt = 0;
+        }
+
         reportEvent(EV_TXCOMPLETE);
         // If we haven't heard from NWK in a while although we asked for a sign
         // assume link is dead - notify application and keep going
@@ -1940,6 +1951,10 @@ static bit_t processDnData (void) {
             }
         }
 #endif // !DISABLE_BEACONS
+
+        if (LMIC.isClassC)
+            start_cont_rx();
+
         return 1;
     }
     if( !decodeFrame() ) {
@@ -1950,6 +1965,24 @@ static bit_t processDnData (void) {
     goto txcomplete;
 }
 
+static void rx_func(osjob_t* job) {
+    if (decodeFrame())
+        reportEvent(EV_RXRECEIVED);
+
+    if (LMIC.isClassC && LMIC.opmode && (OP_JOINING | OP_REJOIN | OP_TXDATA | OP_POLL) == 0)
+        start_cont_rx();
+}
+
+static void start_cont_rx() {
+    LMIC.osjob.func = rx_func;
+    LMIC.rxtime = os_getTime(); // RX _now_
+
+    // Enable "continuous" RX (e.g. without a timeout, still stops after receiving a packet)
+    // Need tx check
+    if ((LMIC.opmode & (OP_JOINING | OP_REJOIN | OP_TXDATA | OP_POLL)) == 0) {
+        os_radio(RADIO_RXON);
+    }
+}
 
 #if !defined(DISABLE_BEACONS)
 static void processBeacon (xref2osjob_t osjob) {
@@ -2379,4 +2412,10 @@ void LMIC_setLinkCheckMode (bit_t enabled) {
 // so e.g. for a +/-1% error you would pass MAX_CLOCK_ERROR * 1 / 100.
 void LMIC_setClockError(u2_t error) {
     LMIC.clockError = error;
+}
+
+
+void report_event(ev_t ev)
+{
+    reportEvent(ev);
 }

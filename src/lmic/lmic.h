@@ -27,8 +27,8 @@ extern "C"{
 #define LMIC_VERSION_MINOR 5
 #define LMIC_VERSION_BUILD 1431528305
 
-enum { MAX_FRAME_LEN      =  64 };   //!< Library cap on max frame length
-enum { TXCONF_ATTEMPTS    =   8 };   //!< Transmit attempts for confirmed frames
+enum { MAX_FRAME_LEN      = 256 };   //!< Library cap on max frame length
+enum { TXCONF_ATTEMPTS    =   1 };   //!< Transmit attempts for confirmed frames
 enum { MAX_MISSED_BCNS    =  20 };   // threshold for triggering rejoin requests
 enum { MAX_RXSYMS         = 100 };   // stop tracking beacon beyond this
 
@@ -41,7 +41,7 @@ enum { TIME_RESYNC        = 6*128 }; // secs
 enum { TXRX_GUARD_ms      =  6000 };  // msecs - don't start TX-RX transaction before beacon
 enum { JOIN_GUARD_ms      =  9000 };  // msecs - don't start Join Req/Acc transaction before beacon
 enum { TXRX_BCNEXT_secs   =     2 };  // secs - earliest start after beacon time
-enum { RETRY_PERIOD_secs  =     3 };  // secs - random period for retrying a confirmed send
+enum { RETRY_PERIOD_secs  =     1 };  // secs - random period for retrying a confirmed send
 
 #if defined(CFG_eu868) // EU868 spectrum ====================================================
 
@@ -140,7 +140,8 @@ enum _ev_t { EV_SCAN_TIMEOUT=1, EV_BEACON_FOUND,
              EV_BEACON_MISSED, EV_BEACON_TRACKED, EV_JOINING,
              EV_JOINED, EV_RFU1, EV_JOIN_FAILED, EV_REJOIN_FAILED,
              EV_TXCOMPLETE, EV_LOST_TSYNC, EV_RESET,
-             EV_RXCOMPLETE, EV_LINK_DEAD, EV_LINK_ALIVE };
+             EV_RXCOMPLETE, EV_LINK_DEAD, EV_LINK_ALIVE,
+             EV_RXRECEIVED, EV_LMIC_ASSERT };
 typedef enum _ev_t ev_t;
 
 enum {
@@ -255,6 +256,7 @@ struct lmic_t {
     ostime_t    bcnRxtime;
     bcninfo_t   bcninfo;      // Last received beacon info
 #endif
+		u1_t        isClassC;
 };
 //! \var struct lmic_t LMIC
 //! The state of LMIC MAC layer is encapsulated in this variable.
@@ -317,4 +319,5 @@ DECL_ON_LMIC_EVENT;
 } // extern "C"
 #endif
 
+void report_event(ev_t ev);
 #endif // _lmic_h_
