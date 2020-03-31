@@ -94,7 +94,7 @@ void hal_pin_nss (u1_t val) {
 u1_t hal_spi (u1_t out) {
     u1_t res = SPI.transfer(out);
 #ifdef LMIC_DEBUG_LEVEL
-#if LMIC_DEBUG_LEVEL>0
+#if LMIC_DEBUG_LEVEL>2
     LMIC_PRINTF_TO.print(">");
     LMIC_PRINTF_TO.print(out, HEX);
     LMIC_PRINTF_TO.print("<");

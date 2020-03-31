@@ -581,6 +581,8 @@ bit_t LMIC_setupBand (u1_t bandidx, s1_t txpow, u2_t txcap) {
 bit_t LMIC_setupChannel (u1_t chidx, u4_t freq, u2_t drmap, s1_t band) {
     if( chidx >= MAX_CHANNELS )
         return 0;
+    if (freq !=0 && (freq < EU868_FREQ_MIN || freq > EU868_FREQ_MAX))
+        return 0;
     if( band == -1 ) {
         if( freq >= 869400000 && freq <= 869650000 )
             freq |= BAND_DECI;   // 10% 27dBm
@@ -595,7 +597,13 @@ bit_t LMIC_setupChannel (u1_t chidx, u4_t freq, u2_t drmap, s1_t band) {
     }
     LMIC.channelFreq [chidx] = freq;
     LMIC.channelDrMap[chidx] = drmap==0 ? DR_RANGE_MAP(DR_SF12,DR_SF7) : drmap;
-    LMIC.channelMap |= 1<<chidx;  // enabled right away
+    if (freq!=0)
+        LMIC.channelMap |= 1<<chidx;  // enabled right away
+    else
+    {
+        LMIC.channelMap &= ~(1<<chidx);  // disabled right away
+    }
+    
     return 1;
 }
 
@@ -1217,11 +1225,31 @@ static bit_t decodeFrame (void) {
             u1_t chidx = opts[oidx+1];  // channel
             u4_t freq  = convFreq(&opts[oidx+2]); // freq
             u1_t drs   = opts[oidx+5];  // datarate span
-            LMIC.snchAns = 0x80;
-            if( freq != 0 && LMIC_setupChannel(chidx, freq, DR_RANGE_MAP(drs&0xF,drs>>4), -1) )
+            LMIC.snchAns = 0x80 ;
+            if( /*freq != 0 && */ LMIC_setupChannel(chidx, freq, DR_RANGE_MAP(drs&0xF,drs>>4), -1) )
                 LMIC.snchAns |= MCMD_SNCH_ANS_DRACK|MCMD_SNCH_ANS_FQACK;
 #endif // !DISABLE_MCMD_SNCH_REQ
             oidx += 6;
+            continue;
+        }
+case MCMD_FRJ_REQ: {
+#if !defined(DISABLE_MCMD_FRJ_REQ)
+            u1_t period       = opts[oidx+1] && 0x38;  // channel
+            u1_t max_retries  = opts[oidx+1] && 0x07; // freq
+            u1_t rejoin_typ   = opts[oidx+2] && 0x70;  // rejoin type
+            u1_t DR           = opts[oidx+2] && 0x0F;  // datarate span
+            LMIC.snchAns = 0x80 ;
+            setDrJoin(DRCHG_SET, DR);
+            LMIC.maxRejoincount = max_retries;
+            LMIC.opmode &= ~(OP_JOINING|OP_TRACK|OP_REJOIN|OP_TXRXPEND|OP_PINGINI) | OP_NEXTCHNL;
+            engineUpdate();
+            LMIC_startJoining();
+            engineUpdate();
+            LMIC_startJoining();
+            //if( 1==1)
+                //LMIC.snchAns |= MCMD_SNCH_ANS_DRACK|MCMD_SNCH_ANS_FQACK;
+#endif // !DISABLE_MCMD_FRJ_REQ
+            oidx += 3;
             continue;
         }
         case MCMD_PING_SET: {
@@ -1442,7 +1470,7 @@ static bit_t processJoinAccept (void) {
             ASSERT((LMIC.opmode & OP_REJOIN) != 0);
             // REJOIN attempt for roaming
             LMIC.opmode &= ~(OP_REJOIN|OP_TXRXPEND);
-            if( LMIC.rejoinCnt < 10 )
+            if( LMIC.rejoinCnt < LMIC.maxRejoincount )
                 LMIC.rejoinCnt++;
             reportEvent(EV_REJOIN_FAILED);
             return 1;
@@ -2386,6 +2414,7 @@ void LMIC_setSession (u4_t netid, devaddr_t devaddr, xref2u1_t nwkKey, xref2u1_t
     LMIC.opmode &= ~(OP_JOINING|OP_TRACK|OP_REJOIN|OP_TXRXPEND|OP_PINGINI);
     LMIC.opmode |= OP_NEXTCHNL;
     stateJustJoined();
+    DO_DEVDB(LMIC.maxRejoincount,10);
     DO_DEVDB(LMIC.netid,   netid);
     DO_DEVDB(LMIC.devaddr, devaddr);
     DO_DEVDB(LMIC.nwkKey,  nwkkey);

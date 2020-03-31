@@ -217,6 +217,7 @@ struct lmic_t {
     bit_t       ladrAns;      // link adr adapt answer pending
     bit_t       devsAns;      // device status answer pending
     u1_t        adrEnabled;
+    u1_t        maxRejoincount;
     u1_t        moreData;     // NWK has more data pending
 #if !defined(DISABLE_MCMD_DCAP_REQ)
     bit_t       dutyCapAns;   // have to ACK duty cycle settings

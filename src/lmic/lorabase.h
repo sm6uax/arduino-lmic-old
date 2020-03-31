@@ -243,6 +243,7 @@ enum {
     MCMD_DN2P_SET = 0x05, // 2nd DN window param: u1:7-4:RFU/3-0:datarate, u3:freq
     MCMD_DEVS_REQ = 0x06, // device status req  : -
     MCMD_SNCH_REQ = 0x07, // set new channel    : u1:chidx, u3:freq, u1:DRrange
+    MCMD_FRJ_REQ = 0x0E,
     // Class B
     MCMD_PING_SET = 0x11, // set ping freq      : u3: freq
     MCMD_BCNI_ANS = 0x12, // next beacon start  : u2: delay(in TUNIT millis), u1:channel
