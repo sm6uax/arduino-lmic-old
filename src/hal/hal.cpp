@@ -13,7 +13,7 @@
 #include "../lmic.h"
 #include "hal.h"
 #define _GNU_SOURCE 1 // For fopencookie
-#include <stdio.h>	#include <stdio.h>
+#include <stdio.h>
 #undef _GNU_SOURCE
 
 // -----------------------------------------------------------------------------
