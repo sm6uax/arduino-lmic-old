@@ -216,11 +216,21 @@ void hal_sleep () {
 // On AVR, use the AVR-specific fdev_setup_stream to redirect stdout
 static int uart_putchar (char c, FILE *)
 {
-	LMIC_PRINTF_TO.write(c);
-	void hal_printf_init() {
-		// The uart is the standard output device STDOUT.
-		stdout = &uartout;
-	}
+    LMIC_PRINTF_TO.write(c) ;
+    return 0 ;
+}
+
+void hal_printf_init() {
+    // create a FILE structure to reference our UART output function
+    static FILE uartout;
+    memset(&uartout, 0, sizeof(uartout));
+
+    // fill in the UART file descriptor with pointer to writer.
+    fdev_setup_stream (&uartout, uart_putchar, NULL, _FDEV_SETUP_WRITE);
+
+    // The uart is the standard output device STDOUT.
+    stdout = &uartout ;
+}
 #else
 // On non-AVR platforms, use the somewhat more complex "cookie"-based
 // approach to custom streams. This is a GNU-specific extension to libc.
@@ -245,7 +255,6 @@ void hal_printf_init() {
     // Disable buffering, so the callbacks get called right away
     setbuf(stdout, nullptr);
 }
-#endif // !defined(__AVR__)
 static ssize_t uart_putchar(void *, const char *buf, size_t len) {
 	
 	uint8_t *msg1 = new uint8_t[len];
@@ -264,7 +273,7 @@ void hal_printf_init() {
 		stdout = fopencookie(NULL, "w", functions);
 		
 }
-	#endif // !defined(__AVR)
+#endif // !defined(__AVR)
 #endif // defined(LMIC_PRINTF_TO)
 
 void hal_init () {
