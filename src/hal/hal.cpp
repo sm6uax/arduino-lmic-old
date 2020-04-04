@@ -212,6 +212,24 @@ void hal_sleep () {
 // -----------------------------------------------------------------------------
 
 #if defined(LMIC_PRINTF_TO)
+#ifdef ESP_PLATFORM
+static int uart_putchar (_reent* a, void* v, const char* c, int n)
+{
+    LMIC_PRINTF_TO.write( (uint8_t*) c, (size_t)n) ;
+    return 0 ;
+}
+void hal_printf_init() {
+    // create a FILE structure to reference our UART output function
+    static FILE uartout;	    static FILE uartout;
+    memset(&uartout, 0, sizeof(uartout));	    memset(&uartout, 0, sizeof(uartout));
+
+    uartout._write = &uart_putchar;
+    uartout._flags = __SWR;
+
+    // The uart is the standard output device STDOUT.	    // The uart is the standard output device STDOUT.
+    stdout = &uartout ;	    stdout = &uartout ;
+}
+#endif
 #if defined(__AVR__)
 // On AVR, use the AVR-specific fdev_setup_stream to redirect stdout
 static int uart_putchar (char c, FILE *)
