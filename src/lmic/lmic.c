@@ -1044,6 +1044,7 @@ static bit_t decodeFrame (void) {
     xref2u1_t d = LMIC.frame;
     u1_t hdr    = d[0];
     u1_t ftype  = hdr & HDR_FTYPE;
+    int sending = 0;
     int  dlen   = LMIC.dataLen;
     const char *window = (LMIC.txrxFlags & TXRX_DNW1) ? "RX1" : ((LMIC.txrxFlags & TXRX_DNW2) ? "RX2" : "Other");
     if( dlen < OFF_DAT_OPTS+4 ||
@@ -1225,9 +1226,28 @@ static bit_t decodeFrame (void) {
             u1_t chidx = opts[oidx+1];  // channel
             u4_t freq  = convFreq(&opts[oidx+2]); // freq
             u1_t drs   = opts[oidx+5];  // datarate span
-            LMIC.snchAns = 0x80 ;
-            if( /*freq != 0 && */ LMIC_setupChannel(chidx, freq, DR_RANGE_MAP(drs&0xF,drs>>4), -1) )
-                LMIC.snchAns |= MCMD_SNCH_ANS_DRACK|MCMD_SNCH_ANS_FQACK;
+            if (sending==2 ){
+                LMIC.snchAns3 = 0x80 ;
+                if( /*freq != 0 && */ LMIC_setupChannel(chidx, freq, DR_RANGE_MAP(drs&0xF,drs>>4), -1) ){
+                    LMIC.snchAns3 |= MCMD_SNCH_ANS_DRACK|MCMD_SNCH_ANS_FQACK;
+                    sending++;
+                }
+            }
+            if (sending==1 ){
+                LMIC.snchAns2 = 0x80 ;
+                if( /*freq != 0 && */ LMIC_setupChannel(chidx, freq, DR_RANGE_MAP(drs&0xF,drs>>4), -1) ){
+                    LMIC.snchAns2 |= MCMD_SNCH_ANS_DRACK|MCMD_SNCH_ANS_FQACK;
+                    sending++;
+                }
+            }
+            if (sending==0 ){
+                LMIC.snchAns = 0x80 ;
+                if( /*freq != 0 && */ LMIC_setupChannel(chidx, freq, DR_RANGE_MAP(drs&0xF,drs>>4), -1) ){
+                    LMIC.snchAns |= MCMD_SNCH_ANS_DRACK|MCMD_SNCH_ANS_FQACK;
+                    sending++;
+                }
+            }
+
 #endif // !DISABLE_MCMD_SNCH_REQ
             oidx += 6;
             continue;
@@ -1357,6 +1377,20 @@ case MCMD_FRJ_REQ: {
         LMIC.txrxFlags |= TXRX_PORT;
         LMIC.dataBeg = poff;
         LMIC.dataLen = pend-poff;
+    }
+    if (port == 0){
+        oidx = 0;
+        while (oidx < LMIC.dataLen){
+            if (LMIC.frame[LMIC.dataBeg+oidx] == MCMD_SNCH_REQ){
+                u1_t chidx = LMIC.frame[LMIC.dataBeg+1];  // channel
+                u4_t freq  = convFreq(&LMIC.frame[LMIC.dataBeg+2]); // freq
+                u1_t drs   = LMIC.frame[LMIC.dataBeg+5];  // datarate span
+                oidx += 6;
+            }else{
+                oidx  = LMIC.dataLen ;
+            }
+
+        }   
     }
 #if LMIC_DEBUG_LEVEL > 0
     lmic_printf("%lu: Received downlink, window=%s, port=%d, ack=%d\n", os_getTime(), window, port, ackup);
@@ -1646,11 +1680,10 @@ static void updataDone (xref2osjob_t osjob) {
 
 // ========================================
 
-
 static void buildDataFrame (void) {
     bit_t txdata = ((LMIC.opmode & (OP_TXDATA|OP_POLL)) != OP_POLL);
     u1_t dlen = txdata ? LMIC.pendTxLen : 0;
-
+     
     // Piggyback MAC options
     // Prioritize by importance
     int  end = OFF_DAT_OPTS;
@@ -1715,6 +1748,12 @@ static void buildDataFrame (void) {
         LMIC.frame[end+1] = LMIC.snchAns & ~MCMD_SNCH_ANS_RFU;
         end += 2;
         LMIC.snchAns = 0;
+    }
+    if( LMIC.snchAns2 ) {
+        LMIC.frame[end+0] = MCMD_SNCH_ANS;
+        LMIC.frame[end+1] = LMIC.snchAns2 & ~MCMD_SNCH_ANS_RFU;
+        end += 2;
+        LMIC.snchAns2 = 0;
     }
 #endif // !DISABLE_MCMD_SNCH_REQ
     ASSERT(end <= OFF_DAT_OPTS+16);
@@ -2126,9 +2165,11 @@ static void engineUpdate (void) {
         #if LMIC_DEBUG_LEVEL > 1
             if (jacc)
                 lmic_printf("%lu: Uplink join pending\n", os_getTime());
-            else
+            else{
                 lmic_printf("%lu: Uplink data pending\n", os_getTime());
+            }
         #endif
+     
         // Find next suitable channel and return availability time
         if( (LMIC.opmode & OP_NEXTCHNL) != 0 ) {
             txbeg = LMIC.txend = nextTx(now);
@@ -2172,7 +2213,7 @@ static void engineUpdate (void) {
                 lmic_printf("%lu: Ready for uplink\n", os_getTime());
             #endif
             // We could send right now!
-        txbeg = now;
+            txbeg = now;
             dr_t txdr = (dr_t)LMIC.datarate;
 #if !defined(DISABLE_JOIN)
             if( jacc ) {
