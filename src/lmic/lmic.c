@@ -972,6 +972,8 @@ static void stateJustJoined (void) {
     LMIC.dnConf      = LMIC.adrChanged = LMIC.ladrAns = LMIC.devsAns = 0;
 #if !defined(DISABLE_MCMD_SNCH_REQ)
     LMIC.snchAns     = 0;
+    LMIC.snchAns2     = 0;
+    LMIC.snchAns3     = 0;
 #endif
 #if !defined(DISABLE_MCMD_DN2P_SET)
     LMIC.dn2Ans      = 0;
@@ -1754,6 +1756,12 @@ static void buildDataFrame (void) {
         LMIC.frame[end+1] = LMIC.snchAns2 & ~MCMD_SNCH_ANS_RFU;
         end += 2;
         LMIC.snchAns2 = 0;
+    }
+    if( LMIC.snchAns3 ) {
+        LMIC.frame[end+0] = MCMD_SNCH_ANS;
+        LMIC.frame[end+1] = LMIC.snchAns3 & ~MCMD_SNCH_ANS_RFU;
+        end += 2;
+        LMIC.snchAns3 = 0;
     }
 #endif // !DISABLE_MCMD_SNCH_REQ
     ASSERT(end <= OFF_DAT_OPTS+16);
